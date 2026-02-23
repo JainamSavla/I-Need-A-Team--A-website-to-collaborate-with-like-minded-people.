@@ -1,0 +1,194 @@
+// This is your Prisma schema file,
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../generated/prisma"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Auth models
+model User {
+  id              String         @id @default(uuid())
+  email           String         @unique
+  name            String?
+  bio             String?
+  skills          String[]       @default([])
+  experienceLevel Int            @default(1)
+  availability    Int            @default(0)
+  interests       String[]       @default([])
+  strengthScore   Int            @default(0)
+  avatarUrl       String?
+  primaryRole     String?
+  socialLinks     Json?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt @default(now())
+  identities      UserIdentity[]
+  isDeleted       Boolean        @default(false)
+  portfolio       Project[]
+  openings        Opening[]
+  applications    Application[]
+  teams           TeamMember[]
+  messages        Message[]
+  sentDirectMessages     DirectMessage[] @relation("SentDirectMessages")
+  receivedDirectMessages DirectMessage[] @relation("ReceivedDirectMessages")
+
+  @@index([email])
+}
+
+model UserIdentity {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider   String // 'Google', 'GitHub', 'EmailPassword', 'PhoneOTP', etc.
+  providerId String // Provider's unique user ID (or email for email/password)
+  metadata   Json? // Provider-specific data (passwordHash, tokens, profile data, etc.)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  isDeleted  Boolean  @default(false)
+
+  @@unique([provider, providerId])
+  @@index([userId])
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  title       String
+  url         String
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isDeleted   Boolean  @default(false)
+
+  @@index([userId])
+}
+
+model DirectMessage {
+  id          String   @id @default(uuid())
+  senderId    String
+  sender      User     @relation("SentDirectMessages", fields: [senderId], references: [id])
+  receiverId  String
+  receiver    User     @relation("ReceivedDirectMessages", fields: [receiverId], references: [id])
+  text        String
+  createdAt   DateTime @default(now())
+  isDeleted   Boolean  @default(false)
+
+  @@index([senderId, receiverId])
+}
+
+model Opening {
+  id          String        @id @default(uuid())
+  recruiterId String
+  recruiter   User          @relation(fields: [recruiterId], references: [id])
+  title       String
+  type        String
+  stage       String
+  description String
+  timeline    String
+  commitment  String
+  compensation String
+  location    String
+  status      String        @default("Open")
+  tags        String[]      @default([])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  isDeleted   Boolean       @default(false)
+  roles       Role[]
+  applications Application[]
+  team        Team?
+
+  @@index([recruiterId])
+}
+
+model Role {
+  id        String   @id @default(uuid())
+  openingId String
+  opening   Opening  @relation(fields: [openingId], references: [id])
+  name      String
+  slots     Int
+  filled    Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isDeleted Boolean  @default(false)
+
+  @@index([openingId])
+}
+
+model Application {
+  id              String   @id @default(uuid())
+  openingId       String
+  opening         Opening  @relation(fields: [openingId], references: [id])
+  applicantId     String
+  applicant       User     @relation(fields: [applicantId], references: [id])
+  coverLetter     String
+  preferredRoleId String?
+  status          String   @default("Pending")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  isDeleted       Boolean  @default(false)
+
+  @@index([openingId])
+  @@index([applicantId])
+}
+
+model Team {
+  id        String       @id @default(uuid())
+  openingId String       @unique
+  opening   Opening      @relation(fields: [openingId], references: [id])
+  name      String
+  code      String       @unique
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  isDeleted Boolean      @default(false)
+  members   TeamMember[]
+  messages  Message[]
+}
+
+model TeamMember {
+  id        String   @id @default(uuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  roleName  String?
+  createdAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  @@unique([teamId, userId])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id])
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id])
+  text      String
+  createdAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  @@index([teamId])
+}
+
+model Otp {
+  id         String   @id @default(uuid())
+  identifier String   // Phone number or email address
+  type       String   // 'phone' or 'email'
+  otp        String   // Hashed OTP
+  expiresAt  DateTime
+  attempts   Int      @default(0)
+  verified   Boolean  @default(false)
+  purpose    String?  // 'login', 'registration', 'password_reset', '2fa', etc.
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  isDeleted  Boolean?
+
+  @@index([identifier, type])
+  @@index([expiresAt])
+  @@index([identifier, type, verified])
+}
